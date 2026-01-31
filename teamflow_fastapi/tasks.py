@@ -4,7 +4,11 @@ import time
 from pathlib import Path
 from typing import Tuple
 
+from dotenv import load_dotenv
 from openai import OpenAI
+
+# Load environment variables from .env file
+load_dotenv()
 
 from .celery_app import celery_app
 from .storage import (
@@ -19,6 +23,7 @@ from .storage import (
 PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.2"))
+OPENAI_MAX_COMPLETION_TOKENS = int(os.getenv("OPENAI_MAX_COMPLETION_TOKENS", "4000"))
 OPENAI_MAX_RETRIES = int(os.getenv("OPENAI_MAX_RETRIES", "2"))
 OPENAI_RETRY_BACKOFF_SECONDS = float(
     os.getenv("OPENAI_RETRY_BACKOFF_SECONDS", "2.0")
@@ -114,6 +119,7 @@ def _call_llm(prompt: str) -> str:
                     {"role": "user", "content": prompt},
                 ],
                 temperature=OPENAI_TEMPERATURE,
+                max_completion_tokens=OPENAI_MAX_COMPLETION_TOKENS,
             )
             content = response.choices[0].message.content
             if not content:

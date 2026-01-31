@@ -43,20 +43,20 @@ def _build_chain(run_id: str, start_step: str = "pm"):
         raise ValueError("Unknown step")
     steps: List = []
     if start_step == "pm":
-        steps = [pm_step.s(run_id), tech_step.s(run_id), qa_step.s(run_id)]
+        steps = [pm_step.si(run_id), tech_step.si(run_id), qa_step.si(run_id)]
     elif start_step == "tech":
-        steps = [tech_step.s(run_id), qa_step.s(run_id)]
+        steps = [tech_step.si(run_id), qa_step.si(run_id)]
     elif start_step == "qa":
-        steps = [qa_step.s(run_id)]
+        steps = [qa_step.si(run_id)]
     elif start_step == "review":
-        steps = [review_step.s(run_id)]
+        steps = [review_step.si(run_id)]
 
     if REVIEW_ENABLED and start_step != "review":
-        steps.append(review_step.s(run_id))
+        steps.append(review_step.si(run_id))
     if REVIEW_ENABLED and start_step == "review":
-        steps = [review_step.s(run_id)]
+        steps = [review_step.si(run_id)]
 
-    steps.append(finalize.s(run_id))
+    steps.append(finalize.si(run_id))
     return chain(*steps)
 
 

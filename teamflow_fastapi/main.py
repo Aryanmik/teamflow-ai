@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from .api import router as api_router
+from teamflow_fastapi.api import router as api_router
 
 app = FastAPI(title="TeamFlow AI", version="0.1.0")
 
