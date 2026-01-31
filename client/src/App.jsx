@@ -1,16 +1,14 @@
-import React, { useState } from 'react'
-import FeatureGrid from './components/FeatureGrid'
-import Hero from './components/Hero'
-import KeyFeatures from './components/KeyFeatures'
-import MvpPanel from './components/MvpPanel'
+import React from 'react'
+import AboutSection from './components/AboutSection'
+import ClaudeHero from './components/ClaudeHero'
+import Navbar from './components/Navbar'
 import Roadmap from './components/Roadmap'
-import TargetUsersPanel from './components/TargetUsersPanel'
+import ContactSection from './components/ContactSection'
+import Footer from './components/Footer'
 import WorkflowTimeline from './components/WorkflowTimeline'
+import UseCases from './components/UseCases'
 
 export default function App() {
-  const [name, setName] = useState('')
-  const [idea, setIdea] = useState('')
-
   return (
     <div className="page">
       <div className="bg-orb orb-1" aria-hidden="true" />
@@ -18,19 +16,14 @@ export default function App() {
       <div className="bg-orb orb-3" aria-hidden="true" />
 
       <main className="container">
-        <Hero
-          name={name}
-          onNameChange={setName}
-          idea={idea}
-          onIdeaChange={setIdea}
-          onGreet={() => alert(`Hello ${name || 'friend'}`)}
-        />
-        <FeatureGrid />
-        <TargetUsersPanel />
-        <KeyFeatures />
+        <Navbar />
+        <ClaudeHero />
+        <UseCases />
         <WorkflowTimeline />
-        <MvpPanel />
+        <AboutSection />
         <Roadmap />
+        <ContactSection />
+        <Footer />
       </main>
     </div>
   )
