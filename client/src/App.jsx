@@ -1,22 +1,37 @@
 import React, { useState } from 'react'
+import FeatureGrid from './components/FeatureGrid'
+import Hero from './components/Hero'
+import KeyFeatures from './components/KeyFeatures'
+import MvpPanel from './components/MvpPanel'
+import Roadmap from './components/Roadmap'
+import TargetUsersPanel from './components/TargetUsersPanel'
+import WorkflowTimeline from './components/WorkflowTimeline'
 
 export default function App() {
   const [name, setName] = useState('')
+  const [idea, setIdea] = useState('')
 
   return (
-    <div className="container">
-      <h1>teamflow-ai — Client UI</h1>
-      <p>Simple UI to begin building user interactions with the Django backend.</p>
-      <div>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Your name"
+    <div className="page">
+      <div className="bg-orb orb-1" aria-hidden="true" />
+      <div className="bg-orb orb-2" aria-hidden="true" />
+      <div className="bg-orb orb-3" aria-hidden="true" />
+
+      <main className="container">
+        <Hero
+          name={name}
+          onNameChange={setName}
+          idea={idea}
+          onIdeaChange={setIdea}
+          onGreet={() => alert(`Hello ${name || 'friend'}`)}
         />
-        <button onClick={() => alert(`Hello ${name || 'friend'}`)}>
-          Greet
-        </button>
-      </div>
+        <FeatureGrid />
+        <TargetUsersPanel />
+        <KeyFeatures />
+        <WorkflowTimeline />
+        <MvpPanel />
+        <Roadmap />
+      </main>
     </div>
   )
 }
