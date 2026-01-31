@@ -1,3 +1,48 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.sqlite3
+*.egg-info/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+media
+
+# Virtual environment
+.venv/
+
+# Node (if you add frontend parts)
+node_modules/
+dist/
+build/
+
+# Editor / OS files
+.DS_Store
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+logs/
+*.log
+
+# Coverage
+coverage/
+coverage.*
+.cache/
+
+# Environment files
+.env
+.env.*
 .venv/
 __pycache__/
 *.pyc
@@ -6,3 +51,4 @@ __pycache__/
 *.sqlite3
 .DS_Store
 .env
+/scripts
