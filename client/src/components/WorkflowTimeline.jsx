@@ -26,7 +26,7 @@ const STEPS = [
 
 export default function WorkflowTimeline() {
   return (
-    <section className="timeline">
+    <section id="workflow" className="timeline">
       <SectionHeader
         title="Coordinated workflow"
         subtitle="Sequential handoffs with feedback loops built in."

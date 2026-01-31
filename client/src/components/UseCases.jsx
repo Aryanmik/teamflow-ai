@@ -20,7 +20,7 @@ const CARDS = [
 
 export default function UseCases() {
   return (
-    <section className="use-cases">
+    <section id="use-cases" className="use-cases">
       <div className="section-header">
         <h2>Use TeamFlow where you work.</h2>
         <p>From idea input to export-ready artifacts in minutes.</p>

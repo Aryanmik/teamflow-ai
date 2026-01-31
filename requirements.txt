@@ -8,3 +8,6 @@ celery
 redis
 pydantic
 openai
+openai-agents
+python-dotenv
+eval_type_backport

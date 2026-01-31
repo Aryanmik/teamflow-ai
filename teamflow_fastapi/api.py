@@ -3,6 +3,7 @@ import time
 import uuid
 from typing import Generator, List
 
+from dotenv import load_dotenv
 from celery import chain
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response, StreamingResponse
@@ -22,6 +23,8 @@ from .storage import (
     set_step_status,
 )
 from .tasks import finalize, pm_step, qa_step, review_step, tech_step
+
+load_dotenv()
 
 router = APIRouter()
 

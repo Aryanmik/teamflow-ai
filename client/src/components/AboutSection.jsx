@@ -2,7 +2,7 @@ import React from 'react'
 
 export default function AboutSection() {
   return (
-    <section className="about">
+    <section id="about" className="about">
       <div>
         <h2>About TeamFlow AI</h2>
         <p>

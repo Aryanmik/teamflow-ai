@@ -7,6 +7,7 @@ import ContactSection from './components/ContactSection'
 import Footer from './components/Footer'
 import WorkflowTimeline from './components/WorkflowTimeline'
 import UseCases from './components/UseCases'
+import WorkflowRunner from './components/WorkflowRunner'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
       <main className="container">
         <Navbar />
         <ClaudeHero />
+        <WorkflowRunner />
         <UseCases />
         <WorkflowTimeline />
         <AboutSection />

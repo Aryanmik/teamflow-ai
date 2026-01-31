@@ -1,8 +1,24 @@
-import React from 'react'
+import React, { useState } from 'react'
 
 export default function ContactSection() {
+  const [scenario, setScenario] = useState('')
+
+  const handleSubmit = () => {
+    if (!scenario.trim()) {
+      return
+    }
+    localStorage.setItem('teamflow:lastIdea', scenario.trim())
+    window.dispatchEvent(
+      new CustomEvent('teamflow:prefillIdea', { detail: { idea: scenario.trim() } })
+    )
+    const section = document.getElementById('workflow-runner')
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
+
   return (
-    <section className="contact">
+    <section id="contact" className="contact">
       <div className="contact-card">
         <div>
           <span className="badge">Get in touch</span>
@@ -12,7 +28,13 @@ export default function ContactSection() {
             across product, tech, and QA.
           </p>
         </div>
-        <form className="contact-form">
+        <form
+          className="contact-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            handleSubmit()
+          }}
+        >
           <div className="form-field">
             <label htmlFor="full-name">Full name</label>
             <input id="full-name" placeholder="Ada Lovelace" />
@@ -27,13 +49,15 @@ export default function ContactSection() {
               id="scenario"
               maxLength={1000}
               placeholder="Share the project idea, goals, and constraints..."
+              value={scenario}
+              onChange={(event) => setScenario(event.target.value)}
             />
             <div className="char-count">
               <span>Max 1000 characters</span>
               <span>Structured outputs guaranteed</span>
             </div>
           </div>
-          <button className="nav-cta" type="button">
+          <button className="nav-cta" type="submit">
             Submit scenario
           </button>
         </form>

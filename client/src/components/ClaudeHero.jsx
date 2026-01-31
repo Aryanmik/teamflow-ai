@@ -3,8 +3,24 @@ import React from 'react'
 const TABS = ['Terminal', 'IDE', 'Web', 'Slack']
 
 export default function ClaudeHero() {
+  const handleStart = () => {
+    const section = document.getElementById('workflow-runner')
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
+
+  const handleDemo = () => {
+    const demoIdea =
+      'Build a hackathon-ready multi-agent workflow tool with a no-login MVP and exportable output.'
+    window.dispatchEvent(
+      new CustomEvent('teamflow:prefillIdea', { detail: { idea: demoIdea } })
+    )
+    handleStart()
+  }
+
   return (
-    <section className="claude-hero">
+    <section id="overview" className="claude-hero">
       <div className="hero-copy">
         <span className="eyebrow">TeamFlow AI</span>
         <h1>AI-powered product planning for real teams.</h1>
@@ -13,10 +29,10 @@ export default function ClaudeHero() {
           into structured product, architecture, and test plans.
         </p>
         <div className="hero-actions">
-          <button className="btn-primary" type="button">
+          <button className="btn-primary" type="button" onClick={handleStart}>
             Start collaboration
           </button>
-          <button className="btn-secondary" type="button">
+          <button className="btn-secondary" type="button" onClick={handleDemo}>
             View demo output
           </button>
         </div>

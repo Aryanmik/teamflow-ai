@@ -1,11 +1,14 @@
+import dataclasses
+import logging
 import os
 import re
 import time
 from pathlib import Path
 from typing import Tuple
 
+from agents import Agent, ModelSettings, Runner, enable_verbose_stdout_logging, trace
+from agents.models.default_models import get_default_model_settings
 from dotenv import load_dotenv
-from openai import OpenAI
 
 # Load environment variables from .env file
 load_dotenv()
@@ -21,15 +24,30 @@ from .storage import (
 )
 
 PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.2")
 OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.2"))
-OPENAI_MAX_COMPLETION_TOKENS = int(os.getenv("OPENAI_MAX_COMPLETION_TOKENS", "4000"))
-OPENAI_MAX_RETRIES = int(os.getenv("OPENAI_MAX_RETRIES", "2"))
-OPENAI_RETRY_BACKOFF_SECONDS = float(
-    os.getenv("OPENAI_RETRY_BACKOFF_SECONDS", "2.0")
-)
+OPENAI_AGENT_MAX_TURNS = int(os.getenv("OPENAI_AGENT_MAX_TURNS", "12"))
+OPENAI_AGENT_VERBOSE_LOGS = os.getenv("OPENAI_AGENTS_VERBOSE_LOGS", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+OPENAI_AGENT_TRACE = os.getenv("OPENAI_AGENTS_TRACE", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+TEAMFLOW_LOG_AGENT_PAYLOADS = os.getenv(
+    "TEAMFLOW_LOG_AGENT_PAYLOADS", "true"
+).lower() in {"1", "true", "yes"}
+TEAMFLOW_LOG_MAX_CHARS = int(os.getenv("TEAMFLOW_LOG_MAX_CHARS", "4000"))
+TEAMFLOW_AGENT_LOG_LEVEL = os.getenv("TEAMFLOW_AGENT_LOG_LEVEL", "INFO").upper()
 
-_client = OpenAI()
+logger = logging.getLogger("teamflow.agents")
+logger.setLevel(getattr(logging, TEAMFLOW_AGENT_LOG_LEVEL, logging.INFO))
+
+if OPENAI_AGENT_VERBOSE_LOGS:
+    enable_verbose_stdout_logging()
 
 
 def _start_step(run_id: str, step: str) -> None:
@@ -74,6 +92,9 @@ def _render_prompt(template: str, **kwargs: str) -> str:
     rendered = template
     for key, value in kwargs.items():
         rendered = rendered.replace(f"${key}", value)
+    missing = re.findall(r"\$[A-Za-z_]+", rendered)
+    if missing:
+        logger.warning("Prompt rendering left placeholders unresolved: %s", missing)
     return rendered
 
 
@@ -103,34 +124,57 @@ def _split_sections(
     return first, second
 
 
-def _call_llm(prompt: str) -> str:
+def _log_payload(label: str, payload: str) -> None:
+    if not TEAMFLOW_LOG_AGENT_PAYLOADS:
+        return
+    if payload is None:
+        logger.info("%s: <none>", label)
+        return
+    text = payload.strip()
+    if not text:
+        logger.info("%s: <empty>", label)
+        return
+    if len(text) > TEAMFLOW_LOG_MAX_CHARS:
+        logger.info(
+            "%s (truncated to %s chars): %s",
+            label,
+            TEAMFLOW_LOG_MAX_CHARS,
+            text[:TEAMFLOW_LOG_MAX_CHARS],
+        )
+        return
+    logger.info("%s: %s", label, text)
+
+
+def _build_model_settings() -> ModelSettings:
+    base = get_default_model_settings(OPENAI_MODEL)
+    return dataclasses.replace(base, temperature=OPENAI_TEMPERATURE)
+
+
+def _run_agent(role: str, prompt: str, run_id: str, step: str) -> str:
     if not os.getenv("OPENAI_API_KEY"):
         raise RuntimeError("OPENAI_API_KEY is not set")
-    last_exc: Exception | None = None
-    for attempt in range(OPENAI_MAX_RETRIES + 1):
-        try:
-            response = _client.chat.completions.create(
-                model=OPENAI_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a specialized agent. Follow the prompt exactly.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=OPENAI_TEMPERATURE,
-                max_completion_tokens=OPENAI_MAX_COMPLETION_TOKENS,
-            )
-            content = response.choices[0].message.content
-            if not content:
-                raise RuntimeError("Empty response from model")
-            return content.strip()
-        except Exception as exc:
-            last_exc = exc
-            if attempt >= OPENAI_MAX_RETRIES:
-                break
-            time.sleep(OPENAI_RETRY_BACKOFF_SECONDS * (2**attempt))
-    raise last_exc or RuntimeError("OpenAI call failed")
+    agent = Agent(
+        name=role,
+        instructions=prompt,
+        model=OPENAI_MODEL,
+        model_settings=_build_model_settings(),
+    )
+    logger.info("Running agent=%s step=%s run_id=%s", role, step, run_id)
+    _log_payload(f"{role} prompt", prompt)
+    input_text = "Generate the requested output."
+    if OPENAI_AGENT_TRACE:
+        with trace(
+            f"TeamFlow {role}",
+            metadata={"run_id": run_id, "step": step, "agent": role},
+        ) as agent_trace:
+            logger.info("Trace started for %s: %s", role, agent_trace.trace_id)
+            result = Runner.run_sync(agent, input_text, max_turns=OPENAI_AGENT_MAX_TURNS)
+    else:
+        result = Runner.run_sync(agent, input_text, max_turns=OPENAI_AGENT_MAX_TURNS)
+    output = result.final_output if hasattr(result, "final_output") else result
+    output_text = "" if output is None else str(output)
+    _log_payload(f"{role} output", output_text)
+    return output_text.strip()
 
 
 @celery_app.task
@@ -139,11 +183,14 @@ def pm_step(run_id: str) -> None:
     _start_step(run_id, step)
     try:
         idea = get_idea(run_id) or ""
+        logger.info("PM received idea for run_id=%s", run_id)
+        _log_payload("Idea", idea)
         template = _load_prompt("pm")
         prompt = _render_prompt(template, idea=idea)
-        content = _call_llm(prompt)
+        content = _run_agent("Product Manager", prompt, run_id, step)
         content = _ensure_heading(content, "Product Requirements (PRD)")
         set_artifact(run_id, "prd", content)
+        logger.info("PM -> TECH handoff prepared for run_id=%s", run_id)
         _finish_step(run_id, step, "completed")
     except Exception as exc:
         _fail_step(run_id, step, exc)
@@ -156,14 +203,17 @@ def tech_step(run_id: str) -> None:
     _start_step(run_id, step)
     try:
         prd = get_artifact(run_id, "prd") or ""
+        logger.info("TECH received PRD for run_id=%s", run_id)
+        _log_payload("PRD input", prd)
         template = _load_prompt("tech")
         prompt = _render_prompt(template, prd=prd)
-        content = _call_llm(prompt)
+        content = _run_agent("Tech Lead", prompt, run_id, step)
         arch, api = _split_sections(content, "System Architecture", "API Design")
         if not api:
             api = "# API Design\n\n- Model output did not include an API Design section."
         set_artifact(run_id, "arch", arch)
         set_artifact(run_id, "api", api)
+        logger.info("TECH -> QA handoff prepared for run_id=%s", run_id)
         _finish_step(run_id, step, "completed")
     except Exception as exc:
         _fail_step(run_id, step, exc)
@@ -178,14 +228,18 @@ def qa_step(run_id: str) -> None:
         arch = get_artifact(run_id, "arch") or ""
         prd = get_artifact(run_id, "prd") or ""
         api = get_artifact(run_id, "api") or ""
+        logger.info("QA received artifacts for run_id=%s", run_id)
+        _log_payload("Architecture input", arch)
+        _log_payload("API input", api)
         template = _load_prompt("qa")
         prompt = _render_prompt(template, prd=prd, arch=arch, api=api)
-        content = _call_llm(prompt)
+        content = _run_agent("QA Engineer", prompt, run_id, step)
         test_plan, risks = _split_sections(content, "Test Plan", "Risk Analysis")
         if not risks:
             risks = "# Risk Analysis\n\n- Model output did not include a Risk Analysis section."
         set_artifact(run_id, "test", test_plan)
         set_artifact(run_id, "risk", risks)
+        logger.info("QA -> REVIEW handoff prepared for run_id=%s", run_id)
         _finish_step(run_id, step, "completed")
     except Exception as exc:
         _fail_step(run_id, step, exc)
@@ -202,11 +256,17 @@ def review_step(run_id: str) -> None:
         api = get_artifact(run_id, "api") or ""
         test = get_artifact(run_id, "test") or ""
         risk = get_artifact(run_id, "risk") or ""
+        logger.info("REVIEW received artifacts for run_id=%s", run_id)
+        _log_payload("PRD input", prd)
+        _log_payload("Architecture input", arch)
+        _log_payload("API input", api)
+        _log_payload("Test plan input", test)
+        _log_payload("Risk input", risk)
         template = _load_prompt("reviewer")
         prompt = _render_prompt(
             template, prd=prd, arch=arch, api=api, test=test, risk=risk
         )
-        review = _call_llm(prompt)
+        review = _run_agent("Reviewer", prompt, run_id, step)
         review = _ensure_heading(review, "Review Notes")
         set_artifact(run_id, "review", review)
         _finish_step(run_id, step, "completed")

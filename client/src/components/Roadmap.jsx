@@ -15,7 +15,7 @@ const ROADMAP = [
 
 export default function Roadmap() {
   return (
-    <section className="roadmap">
+    <section id="roadmap" className="roadmap">
       <div className="roadmap-card">
         <h3>Risks & mitigation</h3>
         <ul>
