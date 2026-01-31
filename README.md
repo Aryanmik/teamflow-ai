@@ -1,5 +1,60 @@
 # teamflow-ai
 
+This repo currently contains a FastAPI + Celery + Redis MVP scaffold for TeamFlow AI. The Django files are present but not used for the FastAPI flow.
+
+## Prerequisites
+- Python 3.10+
+- Redis running locally (or set `REDIS_URL`)
+
+## Setup
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+## Run the API
+```bash
+uvicorn teamflow_fastapi.main:app --reload
+```
+
+## Run the worker
+In another terminal (with the same venv activated):
+```bash
+celery -A teamflow_fastapi.celery_app.celery_app worker --loglevel=INFO
+```
+
+## Optional environment variables
+```bash
+export REDIS_URL=redis://localhost:6379/0
+export REDIS_TTL_SECONDS=21600
+export REVIEW_ENABLED=false
+export SSE_STREAM_TIMEOUT_SECONDS=60
+export SSE_POLL_INTERVAL_SECONDS=1.0
+export OPENAI_API_KEY=your-key-here
+export OPENAI_MODEL=gpt-4o-mini
+export OPENAI_TEMPERATURE=0.2
+export OPENAI_MAX_RETRIES=2
+export OPENAI_RETRY_BACKOFF_SECONDS=2.0
+```
+
+## Test the flow
+```bash
+curl -X POST http://127.0.0.1:8000/runs \
+  -H 'Content-Type: application/json' \
+  -d '{"idea":"A multi-agent app that produces a PRD and architecture."}'
+```
+
+Then check status:
+```bash
+curl http://127.0.0.1:8000/runs/<run_id>
+```
+
+Export Markdown (after completion):
+```bash
+curl http://127.0.0.1:8000/runs/<run_id>/export?format=md
+```
+
 A small Django-based project providing AI-driven collaboration utilities.
 
 ## Table of contents
