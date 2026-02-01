@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+import argparse
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.request
+
+
+BASE_URL = os.getenv("TEAMFLOW_API_URL", "http://127.0.0.1:8000").rstrip("/")
+DEFAULT_TIMEOUT = int(os.getenv("TEAMFLOW_CLI_TIMEOUT_SECONDS", "300"))
+DEFAULT_POLL = float(os.getenv("TEAMFLOW_CLI_POLL_SECONDS", "2.0"))
+
+
+def _request(method, path, payload=None):
+    url = f"{BASE_URL}{path}"
+    data = None
+    headers = {}
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = resp.read().decode("utf-8")
+            return resp.status, body
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8") if exc.fp else ""
+        return exc.code, body
+
+
+def _read_idea(args):
+    if args.idea:
+        return args.idea.strip()
+    if args.file:
+        try:
+            with open(args.file, "r", encoding="utf-8") as handle:
+                return handle.read().strip()
+        except OSError as exc:
+            print(f"Failed to read idea file: {exc}", file=sys.stderr)
+            return ""
+    try:
+        return input("Idea: ").strip()
+    except KeyboardInterrupt:
+        print("\nAborted.", file=sys.stderr)
+        return ""
+
+
+def _pretty_step(step):
+    mapping = {
+        "pm": "PRD",
+        "tech": "Architecture + API",
+        "qa": "Test plan",
+        "principal": "Tech stack",
+        "review": "Review notes",
+    }
+    return mapping.get(step, step.upper())
+
+
+def cmd_start(args):
+    idea = _read_idea(args)
+    if not idea:
+        print("Idea is required.", file=sys.stderr)
+        return 1
+
+    status, body = _request("POST", "/runs", {"idea": idea})
+    if status != 200:
+        print(f"Run creation failed: {status} {body}", file=sys.stderr)
+        return 1
+
+    try:
+        run_id = json.loads(body)["id"]
+    except Exception:
+        print(f"Could not parse run id: {body}", file=sys.stderr)
+        return 1
+
+    print(f"Run started: {run_id}")
+    if args.no_wait:
+        return 0
+
+    seen = {}
+    deadline = time.time() + args.timeout
+    while time.time() < deadline:
+        status, body = _request("GET", f"/runs/{run_id}")
+        if status != 200:
+            print(f"Status check failed: {status} {body}", file=sys.stderr)
+            return 1
+        data = json.loads(body)
+        run_status = data.get("status")
+        for step in data.get("steps", []):
+            name = step.get("name")
+            step_status = step.get("status")
+            if name is None:
+                continue
+            prev = seen.get(name)
+            if step_status != prev:
+                seen[name] = step_status
+                label = _pretty_step(name)
+                if step_status == "completed":
+                    print(f"✓ {label} ready")
+                elif step_status == "failed":
+                    print(f"✗ {label} failed")
+                elif step_status == "skipped":
+                    print(f"• {label} skipped")
+        if run_status in {"completed", "failed"}:
+            break
+        time.sleep(args.poll)
+
+    if run_status != "completed":
+        print(f"Run finished with status: {run_status}", file=sys.stderr)
+        return 1
+
+    if args.export:
+        status, body = _request("GET", f"/runs/{run_id}/export?format=md")
+        if status != 200:
+            print(f"Export failed: {status} {body}", file=sys.stderr)
+            return 1
+        try:
+            with open(args.export, "w", encoding="utf-8") as handle:
+                handle.write(body)
+        except OSError as exc:
+            print(f"Failed to write export: {exc}", file=sys.stderr)
+            return 1
+        print(f"Export saved to {args.export}")
+
+    return 0
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(prog="teamflow")
+    parser.add_argument(
+        "--api",
+        default=BASE_URL,
+        help="Base URL for TeamFlow API (default: TEAMFLOW_API_URL or http://127.0.0.1:8000)",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    start = subparsers.add_parser("start", help="Start a TeamFlow run")
+    start.add_argument("--idea", help="Idea text to submit")
+    start.add_argument("--file", help="Path to a text file containing the idea")
+    start.add_argument("--no-wait", action="store_true", help="Do not wait for completion")
+    start.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help="Timeout in seconds")
+    start.add_argument("--poll", type=float, default=DEFAULT_POLL, help="Polling interval")
+    start.add_argument("--export", help="Save final Markdown export to a file")
+    start.set_defaults(func=cmd_start)
+
+    return parser
+
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+    # Allow per-command override of API base URL.
+    global BASE_URL
+    BASE_URL = args.api.rstrip("/")
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

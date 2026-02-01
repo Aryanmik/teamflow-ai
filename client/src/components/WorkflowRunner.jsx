@@ -343,14 +343,6 @@ export default function WorkflowRunner() {
         </div>
         <div className="runner-actions">
           <button
-            className="btn-primary"
-            type="button"
-            onClick={startRun}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'Starting…' : 'Start collaboration'}
-          </button>
-          <button
             className="btn-secondary"
             type="button"
             onClick={() => {
@@ -367,6 +359,14 @@ export default function WorkflowRunner() {
       <div className="runner-grid">
         <div className="runner-card idea-card">
           <IdeaInput value={idea} onChange={setIdea} />
+          <button
+            className="btn-primary btn-block"
+            type="button"
+            onClick={startRun}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Starting…' : 'Start collaboration'}
+          </button>
           {runId ? (
             <div className="run-meta">
               <div>

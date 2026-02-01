@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TeamFlow AI | Privacy</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f5f0;
+        --text: #181816;
+        --text-muted: rgba(24, 24, 22, 0.65);
+        --accent: #1f1f1b;
+        --card: #ffffff;
+        --stroke: rgba(24, 24, 22, 0.12);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: 'Space Grotesk', sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .page {
+        min-height: 100vh;
+        padding: 32px 20px 48px;
+        display: flex;
+        justify-content: center;
+      }
+      .card {
+        width: min(900px, 100%);
+        background: var(--card);
+        border-radius: 24px;
+        border: 1px solid var(--stroke);
+        padding: 28px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      h1 {
+        font-family: 'Fraunces', serif;
+        margin: 0;
+        font-size: 32px;
+      }
+      h2 {
+        margin: 12px 0 0;
+        font-size: 18px;
+      }
+      p {
+        margin: 0;
+        color: var(--text-muted);
+        line-height: 1.7;
+      }
+      ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--text-muted);
+        line-height: 1.7;
+      }
+      .meta {
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 12px;
+        color: rgba(24, 24, 22, 0.6);
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .footer {
+        margin-top: 8px;
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="card">
+        <div class="meta">TeamFlow AI</div>
+        <h1>Privacy Notice</h1>
+        <p class="meta">Last updated: February 1, 2026</p>
+        <p>
+          TeamFlow AI is a prototype workflow assistant. This notice explains
+          what data we process and how we use it in the current MVP.
+        </p>
+
+        <h2>What we collect</h2>
+        <ul>
+          <li>Product ideas and prompts you submit.</li>
+          <li>Generated outputs (PRD, architecture, API, tests, review).</li>
+          <li>Operational metadata (timestamps, run IDs, step status, errors).</li>
+        </ul>
+
+        <h2>How we use data</h2>
+        <ul>
+          <li>To run the multi-agent workflow and deliver outputs.</li>
+          <li>To improve reliability, performance, and quality.</li>
+          <li>To diagnose issues when you contact support.</li>
+        </ul>
+
+        <h2>What to avoid submitting</h2>
+        <ul>
+          <li>Passwords, private keys, or secrets.</li>
+          <li>Confidential customer or company data.</li>
+          <li>Personal data you do not have permission to share.</li>
+        </ul>
+
+        <h2>Where data lives</h2>
+        <ul>
+          <li>Run data is stored in Redis with a TTL.</li>
+          <li>Logs may include prompt/output previews when enabled.</li>
+        </ul>
+
+        <h2>Retention and deletion</h2>
+        <ul>
+          <li>Data expires based on the configured Redis TTL.</li>
+          <li>Contact support for earlier deletion.</li>
+        </ul>
+
+        <h2>Third-party processing</h2>
+        <ul>
+          <li>Model requests are sent to OpenAI via API.</li>
+          <li>Provider policies may apply to submitted data.</li>
+        </ul>
+
+        <h2>Contact</h2>
+        <p>
+          Questions or deletion requests:
+          <a href="mailto:support@teamflow.ai">support@teamflow.ai</a>
+        </p>
+
+        <div class="footer">
+          <span>© 2026 Dwarika | Aryan | Lariab</span>
+          <a href="/">Back to TeamFlow AI</a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

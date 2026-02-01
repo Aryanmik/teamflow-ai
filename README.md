@@ -105,6 +105,39 @@ The Workflow Runner can:
 - Fetch Markdown export
 - Download an `.ipynb` notebook export
 
+## CLI (teamflow start)
+
+There is a lightweight CLI script at the repo root named `teamflow`.
+
+From the repo root:
+
+```bash
+./teamflow start --idea "Build a weather app for web and iOS."
+```
+
+Options:
+- `--file path/to/idea.txt` (read idea from a file)
+- `--no-wait` (return immediately after creating the run)
+- `--export out.md` (save the final Markdown export)
+
+To make `teamflow` available globally:
+
+```bash
+export PATH="$PATH:$(pwd)"
+```
+
+Or symlink it somewhere on your PATH:
+
+```bash
+ln -s "$(pwd)/teamflow" /usr/local/bin/teamflow
+```
+
+You can also point the CLI at a different API:
+
+```bash
+TEAMFLOW_API_URL=http://127.0.0.1:8000 ./teamflow start --idea "..."
+```
+
 ## Smoke Test (API)
 
 With the API + worker running:
