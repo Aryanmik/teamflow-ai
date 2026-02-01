@@ -17,6 +17,7 @@ export default function WorkflowRunner() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [isNotebookDownloading, setIsNotebookDownloading] = useState(false)
+  const [activeStep, setActiveStep] = useState('all')
 
   const stepStatuses = useMemo(() => {
     const statusMap = {}
@@ -25,6 +26,11 @@ export default function WorkflowRunner() {
     })
     return statusMap
   }, [steps])
+
+  const filteredEvents =
+    activeStep === 'all'
+      ? events
+      : events.filter((event) => event.step === activeStep)
 
   useEffect(() => {
     const stored = localStorage.getItem('teamflow:lastIdea')
@@ -180,6 +186,7 @@ export default function WorkflowRunner() {
     setIsSubmitting(true)
     setFinalDoc('')
     setEvents([])
+    setActiveStep('all')
     try {
       const res = await fetch(`${API_BASE_URL}/runs`, {
         method: 'POST',
@@ -306,6 +313,7 @@ export default function WorkflowRunner() {
             onClick={() => {
               setIdea('')
               setError('')
+              setActiveStep('all')
             }}
           >
             Clear
@@ -314,7 +322,7 @@ export default function WorkflowRunner() {
       </div>
 
       <div className="runner-grid">
-        <div className="runner-card">
+        <div className="runner-card idea-card">
           <IdeaInput value={idea} onChange={setIdea} />
           {runId ? (
             <div className="run-meta">
@@ -331,13 +339,21 @@ export default function WorkflowRunner() {
           {error ? <p className="runner-error">{error}</p> : null}
         </div>
 
-        <div className="runner-card">
+        <div className="runner-card agent-card">
           <h3>Agent progress</h3>
           <div className="step-list">
             {['pm', 'tech', 'qa', 'review'].map((step) => (
               <div key={step} className="step-row">
                 <div>
-                  <strong>{step.toUpperCase()}</strong>
+                  <button
+                    type="button"
+                    className={`step-select ${
+                      activeStep === step ? 'active' : ''
+                    }`}
+                    onClick={() => setActiveStep(step)}
+                  >
+                    {step.toUpperCase()}
+                  </button>
                   <span className={`status-pill ${stepStatuses[step] || 'pending'}`}>
                     {stepStatuses[step] || 'pending'}
                   </span>
@@ -359,13 +375,31 @@ export default function WorkflowRunner() {
           </div>
         </div>
 
-        <div className="runner-card">
+        <div className="runner-card live-events-card">
           <h3>Live events</h3>
-          {events.length === 0 ? (
-            <p className="muted">Events will appear here once the run starts.</p>
+          <div className="event-filters">
+            {['all', 'pm', 'tech', 'qa', 'review'].map((step) => (
+              <button
+                key={step}
+                type="button"
+                className={`event-filter ${
+                  activeStep === step ? 'active' : ''
+                }`}
+                onClick={() => setActiveStep(step)}
+              >
+                {step === 'all' ? 'All' : step.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          {filteredEvents.length === 0 ? (
+            <p className="muted">
+              {events.length === 0
+                ? 'Events will appear here once the run starts.'
+                : 'No events for this step yet.'}
+            </p>
           ) : (
             <div className="event-log">
-              {events.map((event, index) => (
+              {filteredEvents.map((event, index) => (
                 <div key={`${event.type}-${index}`} className="event-row">
                   <span>{event.type}</span>
                   {event.step ? <span>• {event.step}</span> : null}
