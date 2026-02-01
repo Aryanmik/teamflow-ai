@@ -17,6 +17,10 @@ export default function WorkflowRunner() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [isNotebookDownloading, setIsNotebookDownloading] = useState(false)
+  const [isIdeExporting, setIsIdeExporting] = useState(false)
+  const [ideExportMessage, setIdeExportMessage] = useState('')
+  const [idePath, setIdePath] = useState('')
+  const [idePrompt, setIdePrompt] = useState('')
   const [activeStep, setActiveStep] = useState('all')
   const eventCursorRef = useRef(0)
   const streamRef = useRef(null)
@@ -42,6 +46,8 @@ export default function WorkflowRunner() {
   useEffect(() => {
     eventCursorRef.current = 0
     setEvents([])
+    setIdeExportMessage('')
+    setIdePrompt('')
   }, [runId])
 
   useEffect(() => {
@@ -221,7 +227,18 @@ export default function WorkflowRunner() {
     URL.revokeObjectURL(url)
   }
 
-  const startRun = async () => {
+  const downloadBlob = (blob, filename) => {
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  const startRun = async ({ fastMode = false } = {}) => {
     if (!idea.trim()) {
       setError('Add a product idea before starting.')
       return
@@ -235,7 +252,7 @@ export default function WorkflowRunner() {
       const res = await fetch(`${API_BASE_URL}/runs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idea }),
+        body: JSON.stringify({ idea, fast_mode: fastMode }),
       })
       if (!res.ok) {
         const body = await res.text()
@@ -351,6 +368,106 @@ export default function WorkflowRunner() {
     }
   }
 
+  const buildCursorPrompt = (text) => {
+    const normalized = text
+      .replace(/\r\n/g, '\n')
+      .replace(/\u0000/g, '')
+      .replace(/\n{4,}/g, '\n\n\n')
+      .trim()
+    return {
+      prompt: normalized,
+      tooLong: false,
+      maxChars: null,
+    }
+  }
+
+  const attemptIdeOpen = (ide, promptText, popup) => {
+    if (ide === 'cursor') {
+      const params = new URLSearchParams({ text: promptText })
+      const webLink = `https://cursor.com/link/prompt?${params.toString()}`
+      if (popup && !popup.closed) {
+        popup.location.href = webLink
+      } else {
+        window.open(webLink, '_blank', 'noopener')
+      }
+      return
+    }
+
+    const cleaned = idePath.trim()
+    if (cleaned) {
+      const encoded = encodeURIComponent(cleaned)
+      window.location.href = `vscode://file/${encoded}`
+      return
+    }
+    window.location.href = 'vscode://'
+  }
+
+  const downloadIdePrompt = async (ide) => {
+    if (!runId || runStatus !== 'completed') {
+      return
+    }
+    setError('')
+    setIsIdeExporting(true)
+    setIdeExportMessage('')
+    let popup = null
+    if (ide === 'cursor') {
+      popup = window.open('about:blank', '_blank', 'noopener')
+      if (!popup) {
+        setIdeExportMessage('New tab blocked. Please allow popups for this site.')
+      }
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/runs/${runId}/export?format=ide`)
+      if (!res.ok) {
+        const body = await res.text()
+        throw new Error(body || `IDE prompt export failed (${res.status})`)
+      }
+      const text = await res.text()
+      setIdePrompt(text)
+      downloadTextFile(text, 'teamflow_ide_prompt.md', 'text/markdown')
+
+      if (ide === 'cursor') {
+        const cursorRes = await fetch(
+          `${API_BASE_URL}/runs/${runId}/export?format=cursor`
+        )
+        if (!cursorRes.ok) {
+          const body = await cursorRes.text()
+          throw new Error(body || `Cursor prompt export failed (${cursorRes.status})`)
+        }
+        const cursorText = await cursorRes.text()
+        const { prompt } = buildCursorPrompt(cursorText)
+        setIdeExportMessage(
+          'Downloaded teamflow_ide_prompt.md. Opening Cursor with a prefilled prompt.'
+        )
+        attemptIdeOpen(ide, prompt, popup)
+      } else {
+        setIdeExportMessage(
+          'Downloaded teamflow_ide_prompt.md. Open it in VS Code to start.'
+        )
+        attemptIdeOpen(ide, '', popup)
+      }
+    } catch (err) {
+      setError(err.message || 'Unable to export IDE prompt.')
+      if (popup && !popup.closed) {
+        popup.close()
+      }
+    } finally {
+      setIsIdeExporting(false)
+    }
+  }
+
+  const copyIdePrompt = async () => {
+    if (!idePrompt) {
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(idePrompt)
+      setIdeExportMessage('Copied IDE prompt to clipboard.')
+    } catch (err) {
+      setError('Unable to copy prompt. Please use the downloaded file.')
+    }
+  }
+
   return (
     <section id="workflow-runner" className="workflow-runner">
       <div className="runner-header">
@@ -385,14 +502,24 @@ export default function WorkflowRunner() {
       <div className="runner-grid">
         <div className="runner-card idea-card">
           <IdeaInput value={idea} onChange={setIdea} />
-          <button
-            className="btn-primary btn-block"
-            type="button"
-            onClick={startRun}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'Starting…' : 'Start collaboration'}
-          </button>
+          <div className="start-actions">
+            <button
+              className="btn-primary btn-block"
+              type="button"
+              onClick={() => startRun()}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Starting…' : 'Start collaboration'}
+            </button>
+            <button
+              className="btn-secondary btn-block"
+              type="button"
+              onClick={() => startRun({ fastMode: true })}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Starting…' : 'Start collaboration in fast mode'}
+            </button>
+          </div>
           <button
             className="btn-secondary btn-block"
             type="button"
@@ -557,6 +684,46 @@ export default function WorkflowRunner() {
           >
             {isNotebookDownloading ? 'Preparing…' : 'Download .ipynb'}
           </button>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => downloadIdePrompt('cursor')}
+            disabled={!runId || runStatus !== 'completed' || isIdeExporting}
+          >
+            {isIdeExporting ? 'Preparing…' : 'Open in Cursor'}
+          </button>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => downloadIdePrompt('vscode')}
+            disabled={!runId || runStatus !== 'completed' || isIdeExporting}
+          >
+            {isIdeExporting ? 'Preparing…' : 'Open in VS Code'}
+          </button>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={copyIdePrompt}
+            disabled={!idePrompt}
+          >
+            Copy IDE prompt
+          </button>
+        </div>
+        <div className="ide-helper">
+          <label htmlFor="ide-path">IDE folder path (optional)</label>
+          <input
+            id="ide-path"
+            type="text"
+            value={idePath}
+            onChange={(event) => setIdePath(event.target.value)}
+            placeholder="/Users/you/Projects/my-app"
+          />
+          <p>
+            Cursor supports deeplinks like{' '}
+            <code>cursor.com/link/prompt?text=...</code>. VS Code will open the
+            downloaded prompt file.
+          </p>
+          {ideExportMessage ? <p>{ideExportMessage}</p> : null}
         </div>
         {finalDoc ? (
           <div className="export-preview">

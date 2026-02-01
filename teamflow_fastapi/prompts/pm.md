@@ -6,7 +6,6 @@ Input
 - Idea: $idea
 
 Output requirements
-- Start with: "# Product Requirements (PRD)"
 - Use short sections and bullet points.
 - Keep language concrete and execution-ready.
 - Avoid implementation details (leave those to the Tech Lead).

@@ -1,10 +1,12 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
 
 class RunCreateRequest(BaseModel):
     idea: str = Field(..., max_length=1000)
+    fast_mode: bool = Field(default=False)
+    max_chars: Optional[int] = Field(default=None, ge=500, le=20000)
 
 
 class RunCreateResponse(BaseModel):

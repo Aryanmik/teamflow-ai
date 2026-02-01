@@ -47,6 +47,24 @@ def init_run(run_id: str, idea: str) -> None:
         r.expire(key, REDIS_TTL_SECONDS)
 
 
+def set_run_meta(run_id: str, values: Dict[str, str]) -> None:
+    if not values:
+        return
+    r = get_redis()
+    r.hset(_meta_key(run_id), mapping=values)
+    r.expire(_meta_key(run_id), REDIS_TTL_SECONDS)
+
+
+def get_run_meta(run_id: str) -> Dict[str, str]:
+    r = get_redis()
+    return r.hgetall(_meta_key(run_id)) or {}
+
+
+def get_run_meta_value(run_id: str, key: str) -> Optional[str]:
+    r = get_redis()
+    return r.hget(_meta_key(run_id), key)
+
+
 def run_exists(run_id: str) -> bool:
     r = get_redis()
     return r.exists(_meta_key(run_id)) == 1

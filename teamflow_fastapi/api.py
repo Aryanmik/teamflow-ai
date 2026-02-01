@@ -1,29 +1,32 @@
 import os
+import re
 import time
 import uuid
-from typing import Generator, List
+from typing import Generator, List, Optional
 
 from dotenv import load_dotenv
 from celery import chain
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
-
 from .models import RunCreateRequest, RunCreateResponse, RunStatusResponse, StepStatus
 from .storage import (
     STEP_ORDER,
     append_event,
     clear_artifacts,
     get_artifact,
+    get_run_meta,
     get_run_status,
     get_step_statuses,
     init_run,
     list_artifacts,
     run_exists,
     is_run_cancelled,
+    set_run_meta,
     set_run_status,
     set_step_status,
 )
 from .tasks import finalize, orchestrate_run
+from pathlib import Path
 
 load_dotenv()
 
@@ -41,6 +44,169 @@ ARTIFACTS_BY_STEP = {
     "principal": ["stack"],
     "review": ["review"],
 }
+
+PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
+CURSOR_PROMPT_MAX_CHARS = int(os.getenv("CURSOR_PROMPT_MAX_CHARS", "5200"))
+
+
+def _clamp_max_chars(value: int) -> int:
+    return max(500, min(int(value), 20000))
+
+
+def _extract_max_chars(idea: str) -> Optional[int]:
+    if not idea:
+        return None
+    text = idea.lower().replace(",", "")
+    patterns = [
+        (r"(?:within|under|less than|<=)\s*(\d{3,6})\s*(?:characters|chars)?", 1),
+        (r"(\d{3,6})\s*(?:characters|chars)", 1),
+        (r"(\d{1,3})\s*k\s*(?:characters|chars)?", 1000),
+    ]
+    for pattern, multiplier in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return _clamp_max_chars(int(match.group(1)) * multiplier)
+    if any(
+        phrase in text
+        for phrase in (
+            "short document",
+            "short doc",
+            "keep it short",
+            "concise",
+            "brief",
+            "short version",
+        )
+    ):
+        return 5000
+    return None
+
+
+def _load_prompt(name: str) -> str:
+    path = PROMPT_DIR / f"{name}.md"
+    return path.read_text(encoding="utf-8")
+
+
+def _clip(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _compress_markdown(md: str, *, max_bullets: int, max_chars: int) -> str:
+    if not md:
+        return ""
+    lines = md.replace("\r\n", "\n").split("\n")
+    output: List[str] = []
+    bullets_seen = 0
+    in_section = False
+    for raw in lines:
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            output.append(line)
+            bullets_seen = 0
+            in_section = True
+            continue
+        if line.startswith(("-", "*")):
+            if bullets_seen < max_bullets:
+                output.append(_clip(line, max_chars))
+            elif bullets_seen == max_bullets:
+                output.append("- (more in full document)")
+            bullets_seen += 1
+            continue
+        if in_section and bullets_seen == 0:
+            output.append(_clip(line, max_chars))
+    return "\n".join(output).strip()
+
+
+def _strip_api_design(content: str) -> str:
+    if not content:
+        return ""
+    lines = content.replace("\r\n", "\n").split("\n")
+    output = []
+    skipping = False
+    inserted = False
+    for raw in lines:
+        stripped = raw.strip()
+        if stripped.startswith("#"):
+            heading = stripped.lstrip("#").strip().lower()
+            if heading.startswith("api design"):
+                if not inserted:
+                    output.append("## API Design")
+                    output.append("- Refer to teamflow_ide_prompt.md for API details.")
+                    inserted = True
+                skipping = True
+                continue
+            if skipping:
+                skipping = False
+            output.append(raw)
+            continue
+        if skipping:
+            continue
+        output.append(raw)
+    return "\n".join(output).strip()
+
+
+def _minimize_newlines(content: str) -> str:
+    if not content:
+        return ""
+    cleaned = content.replace("\r\n", "\n")
+    cleaned = re.sub(r"\n{2,}", "\n", cleaned)
+    return cleaned.strip()
+
+
+def _strip_matching_heading(content: str, title: str) -> str:
+    if not content:
+        return ""
+    lines = content.replace("\r\n", "\n").split("\n")
+    cleaned: List[str] = []
+    title_lower = title.lower()
+    for raw in lines:
+        line = raw.strip()
+        if line.startswith("#") and title_lower in line.lower():
+            continue
+        cleaned.append(raw)
+    return "\n".join(cleaned).strip()
+
+
+def _build_cursor_prompt(run_id: str, ide_prompt: str) -> str:
+    sections: List[str] = []
+
+    def add_section(title: str, content: str, max_bullets: int, max_chars: int):
+        content = _strip_matching_heading(content or "", title)
+        if not content:
+            sections.append(f"## {title}\n- (not available)")
+            return
+        compressed = _compress_markdown(content, max_bullets=max_bullets, max_chars=max_chars)
+        if not compressed.startswith("#"):
+            compressed = f"## {title}\n{compressed}"
+        sections.append(compressed)
+
+    raw_sections = [
+        ("Product Requirements (PRD)", get_artifact(run_id, "prd") or ""),
+        ("System Architecture", get_artifact(run_id, "arch") or ""),
+        ("API Design", get_artifact(run_id, "api") or ""),
+        ("Test Plan", get_artifact(run_id, "test") or ""),
+        ("Risk Analysis", get_artifact(run_id, "risk") or ""),
+        ("Tech Stack Recommendation", get_artifact(run_id, "stack") or ""),
+    ]
+
+    header = (
+        "You are an engineering agent working inside an IDE. "
+        "Use the summarized requirements below to start implementation. "
+        "For full context, open teamflow_ide_prompt.md."
+    )
+
+    # Try progressively smaller summaries until within the Cursor limit.
+    for max_bullets, max_chars in [(12, 220), (10, 180), (8, 150), (6, 120)]:
+        sections = []
+        for title, content in raw_sections:
+            add_section(title, content, max_bullets=max_bullets, max_chars=max_chars)
+        candidate = "\n\n---\n\n".join([header] + sections)
+        if len(candidate) <= CURSOR_PROMPT_MAX_CHARS:
+            return candidate
+    return candidate
 
 
 def _build_chain(run_id: str, start_step: str = "pm"):
@@ -61,6 +227,13 @@ def create_run(payload: RunCreateRequest) -> RunCreateResponse:
         raise HTTPException(status_code=400, detail="Idea must not be empty")
     run_id = f"run_{uuid.uuid4().hex}"
     init_run(run_id, idea)
+    max_chars = payload.max_chars or _extract_max_chars(idea)
+    if payload.fast_mode:
+        if max_chars is None or max_chars > 5000:
+            max_chars = 5000
+        set_run_meta(run_id, {"fast_mode": "true"})
+    if max_chars:
+        set_run_meta(run_id, {"max_chars": str(max_chars)})
     if not REVIEW_ENABLED:
         set_step_status(run_id, "review", "skipped")
     _build_chain(run_id).apply_async()
@@ -169,9 +342,25 @@ def stream_events(run_id: str, request: Request, start: int = 0) -> StreamingRes
 def export_run(run_id: str, format: str = "md") -> Response:
     if not run_exists(run_id):
         raise HTTPException(status_code=404, detail="Run not found")
-    if format != "md":
-        raise HTTPException(status_code=400, detail="Only md is supported in MVP")
     final_doc = get_artifact(run_id, "final")
     if not final_doc:
         raise HTTPException(status_code=409, detail="Run not finalized")
-    return Response(content=final_doc, media_type="text/markdown; charset=utf-8")
+    if format == "md":
+        return Response(content=final_doc, media_type="text/markdown; charset=utf-8")
+    if format not in {"ide", "cursor"}:
+        raise HTTPException(status_code=400, detail="Only md, ide, or cursor is supported in MVP")
+
+    prompt = _load_prompt("ide_agent_prompt").strip()
+    if format == "cursor":
+        cursor_doc = _strip_api_design(final_doc)
+        cursor_doc = _minimize_newlines(cursor_doc)
+        return Response(content=cursor_doc, media_type="text/markdown; charset=utf-8")
+
+    parts = [prompt]
+    for name in ("prd", "arch", "api", "test", "risk", "stack"):
+        content = get_artifact(run_id, name)
+        if content:
+            parts.append(content.strip())
+    combined = "\n\n---\n\n".join(parts)
+    headers = {"Content-Disposition": 'attachment; filename="teamflow_ide_prompt.md"'}
+    return Response(content=combined, media_type="text/markdown; charset=utf-8", headers=headers)

@@ -4,7 +4,7 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Tuple
+from typing import Optional, Tuple
 
 from agents import Agent, ModelSettings, Runner, enable_verbose_stdout_logging, trace
 from agents.models.default_models import get_default_model_settings
@@ -19,6 +19,7 @@ from .storage import (
     get_run_status,
     get_artifact,
     get_idea,
+    get_run_meta,
     set_artifact,
     set_run_status,
     set_step_status,
@@ -118,6 +119,31 @@ def _ensure_heading(content: str, heading: str) -> str:
     if pattern.search(content):
         return content.strip()
     return f"# {heading}\n\n{content.strip()}"
+
+
+def _get_max_chars(run_id: str) -> Optional[int]:
+    meta = get_run_meta(run_id)
+    value = meta.get("max_chars") if meta else None
+    if not value:
+        if meta and meta.get("fast_mode"):
+            return 5000
+        return None
+    try:
+        return max(500, int(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _apply_length_hint(prompt: str, run_id: str) -> str:
+    max_chars = _get_max_chars(run_id)
+    if not max_chars:
+        return prompt
+    if "Output constraint:" in prompt:
+        return prompt
+    return (
+        f"{prompt}\n\nOutput constraint: Keep this step concise so the combined final "
+        f"output stays within {max_chars} characters."
+    )
 
 
 def _split_sections(
@@ -234,6 +260,93 @@ def _join_feedback(*parts: str) -> str:
     return "\n\n---\n\n".join([p for p in parts if p])
 
 
+def _strip_matching_heading(content: str, title: str) -> str:
+    if not content:
+        return ""
+    lines = content.replace("\r\n", "\n").split("\n")
+    cleaned = []
+    title_lower = title.lower()
+    for raw in lines:
+        line = raw.strip()
+        if line.startswith("#") and title_lower in line.lower():
+            continue
+        cleaned.append(raw)
+    return "\n".join(cleaned).strip()
+
+
+def _compress_markdown(md: str, *, max_bullets: int, max_chars: int) -> str:
+    if not md:
+        return ""
+    lines = md.replace("\r\n", "\n").split("\n")
+    output = []
+    bullets_seen = 0
+    in_section = False
+    for raw in lines:
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            output.append(line)
+            bullets_seen = 0
+            in_section = True
+            continue
+        if line.startswith(("-", "*")):
+            if bullets_seen < max_bullets:
+                output.append(line[:max_chars].rstrip())
+            elif bullets_seen == max_bullets:
+                output.append("- (more in full document)")
+            bullets_seen += 1
+            continue
+        if in_section and bullets_seen == 0:
+            output.append(line[:max_chars].rstrip())
+    return "\n".join(output).strip()
+
+
+def _build_short_final_doc(run_id: str, max_chars: int) -> str:
+    sections = []
+    raw_sections = [
+        ("Product Requirements (PRD)", get_artifact(run_id, "prd") or ""),
+        ("System Architecture", get_artifact(run_id, "arch") or ""),
+        ("API Design", get_artifact(run_id, "api") or ""),
+        ("Test Plan", get_artifact(run_id, "test") or ""),
+        ("Risk Analysis", get_artifact(run_id, "risk") or ""),
+        ("Tech Stack Recommendation", get_artifact(run_id, "stack") or ""),
+        ("Review Notes", get_artifact(run_id, "review") or ""),
+    ]
+
+    def add_section(title: str, content: str, max_bullets: int, max_chars_line: int):
+        if not content:
+            return
+        content = _strip_matching_heading(content, title)
+        compressed = _compress_markdown(
+            content, max_bullets=max_bullets, max_chars=max_chars_line
+        )
+        if not compressed.startswith("#"):
+            compressed = f"## {title}\n{compressed}"
+        sections.append(compressed)
+
+    candidate = ""
+    for max_bullets, max_chars_line in [
+        (8, 200),
+        (6, 160),
+        (5, 130),
+        (4, 110),
+        (3, 90),
+        (2, 80),
+        (1, 70),
+        (1, 55),
+    ]:
+        sections = []
+        for title, content in raw_sections:
+            add_section(title, content, max_bullets, max_chars_line)
+        candidate = "\n\n---\n\n".join(sections) if sections else ""
+        if len(candidate) <= max_chars:
+            return candidate
+    if not candidate:
+        return ""
+    return candidate[:max_chars].rstrip()
+
+
 def _run_started(run_id: str, *, start_step: str) -> None:
     set_run_status(run_id, "running")
     append_event(
@@ -277,6 +390,7 @@ def orchestrate_run(run_id: str, start_step: str = "pm") -> None:
             _log_payload("Idea", idea)
             template = _load_prompt("pm")
             prompt = _render_prompt(template, idea=idea)
+            prompt = _apply_length_hint(prompt, run_id)
             prd = _run_agent(
                 "Product Manager",
                 prompt,
@@ -302,6 +416,7 @@ def orchestrate_run(run_id: str, start_step: str = "pm") -> None:
             _log_payload("PRD input", prd)
             template = _load_prompt("tech")
             prompt = _render_prompt(template, prd=prd)
+            prompt = _apply_length_hint(prompt, run_id)
             content = _run_agent(
                 "Tech Lead",
                 prompt,
@@ -332,6 +447,7 @@ def orchestrate_run(run_id: str, start_step: str = "pm") -> None:
             _log_payload("API input", api)
             template = _load_prompt("qa")
             prompt = _render_prompt(template, prd=prd, arch=arch, api=api)
+            prompt = _apply_length_hint(prompt, run_id)
             content = _run_agent(
                 "QA Engineer",
                 prompt,
@@ -363,6 +479,7 @@ def orchestrate_run(run_id: str, start_step: str = "pm") -> None:
             prompt = _render_prompt(
                 template, prd=prd, arch=arch, api=api, test=test_plan, risk=risks
             )
+            prompt = _apply_length_hint(prompt, run_id)
             stack = _run_agent(
                 "Principal Engineer",
                 prompt,
@@ -401,6 +518,7 @@ def orchestrate_run(run_id: str, start_step: str = "pm") -> None:
                 risk=risks,
                 stack=stack,
             )
+            prompt = _apply_length_hint(prompt, run_id)
             review = _run_agent(
                 "Reviewer",
                 prompt,
@@ -452,6 +570,7 @@ def orchestrate_run(run_id: str, start_step: str = "pm") -> None:
                 pe_feedback=pe_feedback,
                 iteration=str(iteration),
             )
+            prompt = _apply_length_hint(prompt, run_id)
             content = _run_agent(
                 "Tech Lead",
                 prompt,
@@ -502,6 +621,7 @@ def orchestrate_run(run_id: str, start_step: str = "pm") -> None:
                 risk=risks,
                 stack=stack,
             )
+            prompt = _apply_length_hint(prompt, run_id)
             review = _run_agent(
                 "Reviewer",
                 prompt,
@@ -532,6 +652,7 @@ def pm_step(run_id: str) -> None:
         _log_payload("Idea", idea)
         template = _load_prompt("pm")
         prompt = _render_prompt(template, idea=idea)
+        prompt = _apply_length_hint(prompt, run_id)
         content = _run_agent("Product Manager", prompt, run_id, step)
         content = _ensure_heading(content, "Product Requirements (PRD)")
         set_artifact(run_id, "prd", content)
@@ -552,6 +673,7 @@ def tech_step(run_id: str) -> None:
         _log_payload("PRD input", prd)
         template = _load_prompt("tech")
         prompt = _render_prompt(template, prd=prd)
+        prompt = _apply_length_hint(prompt, run_id)
         content = _run_agent("Tech Lead", prompt, run_id, step)
         arch, api = _split_sections(content, "System Architecture", "API Design")
         if not api:
@@ -578,6 +700,7 @@ def qa_step(run_id: str) -> None:
         _log_payload("API input", api)
         template = _load_prompt("qa")
         prompt = _render_prompt(template, prd=prd, arch=arch, api=api)
+        prompt = _apply_length_hint(prompt, run_id)
         content = _run_agent("QA Engineer", prompt, run_id, step)
         test_plan, risks = _split_sections(content, "Test Plan", "Risk Analysis")
         if not risks:
@@ -613,6 +736,7 @@ def review_step(run_id: str) -> None:
         prompt = _render_prompt(
             template, prd=prd, arch=arch, api=api, test=test, risk=risk, stack=stack
         )
+        prompt = _apply_length_hint(prompt, run_id)
         review = _run_agent("Reviewer", prompt, run_id, step)
         review = _ensure_heading(review, "Review Notes")
         set_artifact(run_id, "review", review)
@@ -634,6 +758,9 @@ def finalize(run_id: str) -> None:
             if content:
                 parts.append(content)
         final_doc = "\n\n---\n\n".join(parts) if parts else ""
+        max_chars = _get_max_chars(run_id)
+        if max_chars and final_doc and len(final_doc) > max_chars:
+            final_doc = _build_short_final_doc(run_id, max_chars)
         set_artifact(run_id, "final", final_doc)
         set_run_status(run_id, "completed")
         append_event(run_id, {"type": "run_completed", "timestamp": int(time.time())})

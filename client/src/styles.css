@@ -764,6 +764,16 @@ body {
   justify-content: center;
 }
 
+.start-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.start-actions .btn-block {
+  flex: 1 1 220px;
+}
+
 .runner-card.idea-card {
   grid-area: idea;
 }
@@ -811,7 +821,7 @@ body {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  margin-left: 8px;
+  margin-left: 0;
   background: rgba(24, 24, 22, 0.08);
   max-width: 140px;
   overflow: hidden;
@@ -992,6 +1002,42 @@ body {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.ide-helper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 520px;
+}
+
+.ide-helper label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(24, 24, 22, 0.6);
+}
+
+.ide-helper input {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(24, 24, 22, 0.12);
+  background: #ffffff;
+  font-size: 13px;
+}
+
+.ide-helper p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ide-helper code {
+  font-family: 'Space Grotesk', sans-serif;
+  background: rgba(24, 24, 22, 0.06);
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 11px;
 }
 
 .export-preview {
