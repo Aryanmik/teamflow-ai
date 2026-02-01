@@ -170,3 +170,9 @@ ORCH iteration=1 from=Orchestrator to=Tech Lead step=tech reason=Revise ...
 ## Orchestration Design Doc
 
 See `HUB_SPOKE_ORCHESTRATION.md` for the hub-and-spoke flow and revision loop details.
+
+## Example Output
+
+An example artifact bundle from the demo run is checked in under:
+
+- `teamflow_fastapi/examples/HR-app/`
