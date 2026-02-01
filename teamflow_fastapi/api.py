@@ -19,6 +19,7 @@ from .storage import (
     init_run,
     list_artifacts,
     run_exists,
+    is_run_cancelled,
     set_run_status,
     set_step_status,
 )
@@ -110,6 +111,28 @@ def regenerate_step(run_id: str, step: str) -> dict:
     )
     _build_chain(run_id, start_step=step).apply_async()
     return {"id": run_id, "status": "queued", "step": step}
+
+
+@router.post("/runs/{run_id}/cancel")
+def cancel_run(run_id: str) -> dict:
+    if not run_exists(run_id):
+        raise HTTPException(status_code=404, detail="Run not found")
+    status = get_run_status(run_id) or "unknown"
+    if status in {"completed", "failed", "cancelled"}:
+        return {"id": run_id, "status": status}
+
+    set_run_status(run_id, "cancelled")
+    step_statuses = get_step_statuses(run_id)
+    for step in STEP_ORDER:
+        current = step_statuses.get(step)
+        if current in {None, "pending", "queued", "running", "unknown"}:
+            set_step_status(run_id, step, "cancelled")
+
+    append_event(
+        run_id,
+        {"type": "run_cancelled", "timestamp": int(time.time())},
+    )
+    return {"id": run_id, "status": "cancelled"}
 
 
 @router.get("/runs/{run_id}/events")

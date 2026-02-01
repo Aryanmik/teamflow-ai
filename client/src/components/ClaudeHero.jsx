@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
 
-const TABS = ['Terminal', 'IDE', 'Web', 'Slack']
+const TABS = ['Terminal', 'Web']
 const TAB_CONTENT = {
   Terminal: {
-    transcript: `$ teamflow start
+    transcript: `./teamflow start --idea "Build a weather app for web and iOS."
 > role: Product Manager
 > goal: Convert idea to PRD
 
@@ -15,19 +15,7 @@ Compiling deliverables...
 ✓ Architecture ready
 ✓ Test plan ready`,
     prompt:
-      'Build a hackathon-ready multi-agent workflow tool with a no-login MVP and exportable output.',
-  },
-  IDE: {
-    transcript: `// teamflow.config.ts
-export default {
-  workflow: ['pm', 'tech', 'qa', 'review'],
-  output: 'markdown',
-  export: ['md', 'ipynb'],
-}
-
-> teamflow run idea.md`,
-    prompt:
-      'Generate a workflow bundle with a prefilled idea and exportable artifacts.',
+      'Build a weather app for web and iOS.',
   },
   Web: {
     transcript: `POST /runs
@@ -40,15 +28,6 @@ GET /runs/{id}/export?format=md
 status: completed`,
     prompt:
       'Start a run from the web UI and stream progress to the dashboard.',
-  },
-  Slack: {
-    transcript: `/teamflow start
-Idea: Launch a new product planning flow.
-
-PM ✅ PRD delivered
-Tech ✅ Architecture drafted
-QA ✅ Test plan ready`,
-    prompt: 'Kick off a workflow directly from Slack with status updates.',
   },
 }
 
@@ -78,12 +57,16 @@ export default function ClaudeHero() {
         <span className="eyebrow">TeamFlow AI</span>
         <h1>AI-powered product planning for real teams.</h1>
         <p>
-          Coordinate PM, Tech, QA, and Reviewer agents to turn a single idea
+          Coordinate PM, Tech, QA, Principal Engineer, and Reviewer agents to turn a single idea
           into structured product, architecture, and test plans.
         </p>
         <div className="hero-actions">
-          <button className="btn-primary" type="button" onClick={handleStart}>
-            Start collaboration
+          <button
+            className="btn-primary btn-hero"
+            type="button"
+            onClick={handleStart}
+          >
+            Start Planning and building
           </button>
           <button className="btn-secondary" type="button" onClick={handleDemo}>
             View demo output
@@ -117,7 +100,7 @@ export default function ClaudeHero() {
             </div>
             <pre>
               <code>
-{activeContent.transcript}
+                {activeContent.transcript}
               </code>
             </pre>
           </div>

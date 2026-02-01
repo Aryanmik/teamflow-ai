@@ -447,6 +447,13 @@ body {
   cursor: pointer;
 }
 
+.btn-hero {
+  padding: 16px 26px;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  box-shadow: 0 14px 28px rgba(24, 24, 22, 0.18);
+}
+
 .btn-secondary {
   padding: 12px 20px;
   border-radius: 999px;
@@ -648,22 +655,25 @@ body {
 
 .idea-input textarea {
   width: 100%;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(24, 24, 22, 0.12);
-  background: #ffffff;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(24, 24, 22, 0.18);
+  background: #fffdfa;
   color: var(--text);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.6;
   outline: none;
   resize: vertical;
-  min-height: 150px;
-  transition: border 0.2s ease, box-shadow 0.2s ease;
+  min-height: 220px;
+  box-shadow: inset 0 1px 0 rgba(24, 24, 22, 0.06);
+  transition: border 0.2s ease, box-shadow 0.2s ease,
+    background 0.2s ease;
 }
 
 .idea-input textarea:focus {
   border-color: rgba(24, 24, 22, 0.4);
   box-shadow: 0 0 0 3px rgba(24, 24, 22, 0.12);
+  background: #ffffff;
 }
 
 .char-count {
@@ -705,6 +715,19 @@ body {
   max-width: 520px;
 }
 
+.runner-steps {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 520px;
+}
+
+.runner-steps li {
+  margin: 4px 0;
+}
+
 .runner-actions {
   display: flex;
   gap: 12px;
@@ -713,21 +736,27 @@ body {
 
 .runner-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   grid-template-areas:
-    "idea progress"
-    "events events";
+    "idea idea"
+    "events progress";
   gap: 16px;
 }
 
 .runner-card {
-  padding: 18px;
+  padding: 20px;
   border-radius: 18px;
   background: #f7f5f0;
   border: 1px solid rgba(24, 24, 22, 0.1);
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.runner-card.idea-card {
+  background: #f5f1e8;
+  border: 1px solid rgba(24, 24, 22, 0.12);
+  box-shadow: 0 18px 40px rgba(24, 24, 22, 0.08);
 }
 
 .btn-block {
@@ -753,11 +782,24 @@ body {
   justify-content: space-between;
   gap: 12px;
   font-size: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
 }
 
 .run-meta span {
   display: block;
   color: var(--text-muted);
+}
+
+.run-meta strong {
+  display: block;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.run-meta > div {
+  min-width: 0;
+  flex: 1 1 0;
 }
 
 .status-pill {
@@ -771,6 +813,10 @@ body {
   letter-spacing: 0.08em;
   margin-left: 8px;
   background: rgba(24, 24, 22, 0.08);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-pill.completed {
@@ -798,17 +844,33 @@ body {
   color: var(--text-muted);
 }
 
+.status-pill.cancelled {
+  background: rgba(161, 58, 58, 0.15);
+  color: #6b2a2a;
+}
+
 .step-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+}
+
+.step-row > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .step-row {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(24, 24, 22, 0.08);
 }
 
 .step-select {
@@ -819,6 +881,7 @@ body {
   font-weight: 700;
   color: var(--text);
   cursor: pointer;
+  text-align: left;
 }
 
 .step-select.active {
@@ -830,6 +893,7 @@ body {
 }
 
 .step-action {
+  justify-self: end;
   border: 1px solid rgba(24, 24, 22, 0.18);
   background: transparent;
   padding: 6px 12px;

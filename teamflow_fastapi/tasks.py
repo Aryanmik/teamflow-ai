@@ -16,6 +16,7 @@ load_dotenv()
 from .celery_app import celery_app
 from .storage import (
     append_event,
+    get_run_status,
     get_artifact,
     get_idea,
     set_artifact,
@@ -262,8 +263,12 @@ def orchestrate_run(run_id: str, start_step: str = "pm") -> None:
 
     current_step = start_step
     try:
+        if get_run_status(run_id) == "cancelled":
+            return
         # 1) PM (PRD)
         if steps.index(start_step) <= steps.index("pm"):
+            if get_run_status(run_id) == "cancelled":
+                return
             step = "pm"
             current_step = step
             _start_step(run_id, step)
@@ -288,6 +293,8 @@ def orchestrate_run(run_id: str, start_step: str = "pm") -> None:
 
         # 2) Tech (Architecture + API)
         if steps.index(start_step) <= steps.index("tech"):
+            if get_run_status(run_id) == "cancelled":
+                return
             step = "tech"
             current_step = step
             _start_step(run_id, step)
@@ -315,6 +322,8 @@ def orchestrate_run(run_id: str, start_step: str = "pm") -> None:
 
         # 3) QA (Test + Risks)
         if steps.index(start_step) <= steps.index("qa"):
+            if get_run_status(run_id) == "cancelled":
+                return
             step = "qa"
             current_step = step
             _start_step(run_id, step)
@@ -345,6 +354,8 @@ def orchestrate_run(run_id: str, start_step: str = "pm") -> None:
 
         # 4) Principal Engineer (Stack + feedback)
         if steps.index(start_step) <= steps.index("principal"):
+            if get_run_status(run_id) == "cancelled":
+                return
             step = "principal"
             current_step = step
             _start_step(run_id, step)
@@ -366,6 +377,8 @@ def orchestrate_run(run_id: str, start_step: str = "pm") -> None:
 
         # If we're regenerating only the review step, skip the revision loop.
         if start_step == "review":
+            if get_run_status(run_id) == "cancelled":
+                return
             if not REVIEW_ENABLED:
                 set_step_status(run_id, "review", "skipped")
                 return
@@ -403,6 +416,8 @@ def orchestrate_run(run_id: str, start_step: str = "pm") -> None:
 
         # 5) Revision loop (bounded)
         for iteration in range(1, TEAMFLOW_REVISION_CYCLES + 1):
+            if get_run_status(run_id) == "cancelled":
+                return
             if TEAMFLOW_SSE_AGENT_EVENTS:
                 append_event(
                     run_id,
@@ -466,6 +481,8 @@ def orchestrate_run(run_id: str, start_step: str = "pm") -> None:
 
         # 6) Reviewer (final)
         if REVIEW_ENABLED:
+            if get_run_status(run_id) == "cancelled":
+                return
             step = "review"
             current_step = step
             _start_step(run_id, step)
@@ -609,6 +626,8 @@ def review_step(run_id: str) -> None:
 def finalize(run_id: str) -> None:
     step = "finalize"
     try:
+        if get_run_status(run_id) == "cancelled":
+            return
         parts = []
         for name in ("prd", "arch", "api", "test", "risk", "stack", "review"):
             content = get_artifact(run_id, name)

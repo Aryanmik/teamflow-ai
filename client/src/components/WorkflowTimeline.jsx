@@ -19,6 +19,11 @@ const STEPS = [
   },
   {
     label: '04',
+    title: 'Principal Engineer',
+    description: 'Recommends tech stack and flags engineering risks.',
+  },
+  {
+    label: '05',
     title: 'Reviewer',
     description: 'Validates consistency and improves output.',
   },

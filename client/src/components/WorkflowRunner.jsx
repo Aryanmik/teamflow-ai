@@ -89,6 +89,7 @@ export default function WorkflowRunner() {
           return
         }
         setError(err.message || 'Unable to fetch status.')
+        setTimeout(pollStatus, 2500)
       }
     }
 
@@ -251,6 +252,26 @@ export default function WorkflowRunner() {
     }
   }
 
+  const cancelRun = async () => {
+    if (!runId) {
+      return
+    }
+    setError('')
+    try {
+      const res = await fetch(`${API_BASE_URL}/runs/${runId}/cancel`, {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const body = await res.text()
+        throw new Error(body || `Cancel failed (${res.status})`)
+      }
+      const data = await res.json()
+      setRunStatus(data.status || 'cancelled')
+    } catch (err) {
+      setError(err.message || 'Unable to cancel run.')
+    }
+  }
+
   const regenerateStep = async (step) => {
     if (!runId) {
       return
@@ -337,9 +358,14 @@ export default function WorkflowRunner() {
           <span className="eyebrow">Live workflow</span>
           <h2>Start a multi-agent run</h2>
           <p>
-            Submit a product idea and watch PM, Tech, QA, and Review agents
+            Submit a product idea and watch PM, Tech, QA, Principal Engineer and Review agents
             coordinate in real time. Outputs are exportable as Markdown.
           </p>
+          <ol className="runner-steps">
+            <li>Describe your product scenario in one or two sentences.</li>
+            <li>Click Start collaboration to launch the agent workflow.</li>
+            <li>Track progress and export Markdown or .ipynb results.</li>
+          </ol>
         </div>
         <div className="runner-actions">
           <button
@@ -367,6 +393,16 @@ export default function WorkflowRunner() {
           >
             {isSubmitting ? 'Starting…' : 'Start collaboration'}
           </button>
+          <button
+            className="btn-secondary btn-block"
+            type="button"
+            onClick={cancelRun}
+            disabled={
+              !runId || !['running', 'queued'].includes(runStatus) || isSubmitting
+            }
+          >
+            Stop run
+          </button>
           {runId ? (
             <div className="run-meta">
               <div>
@@ -390,9 +426,8 @@ export default function WorkflowRunner() {
                 <div>
                   <button
                     type="button"
-                    className={`step-select ${
-                      activeStep === step ? 'active' : ''
-                    }`}
+                    className={`step-select ${activeStep === step ? 'active' : ''
+                      }`}
                     onClick={() => setActiveStep(step)}
                   >
                     {step.toUpperCase()}
@@ -425,9 +460,8 @@ export default function WorkflowRunner() {
               <button
                 key={step}
                 type="button"
-                className={`event-filter ${
-                  activeStep === step ? 'active' : ''
-                }`}
+                className={`event-filter ${activeStep === step ? 'active' : ''
+                  }`}
                 onClick={() => setActiveStep(step)}
               >
                 {step === 'all' ? 'All' : step.toUpperCase()}

@@ -69,6 +69,10 @@ def get_run_status(run_id: str) -> Optional[str]:
     return data
 
 
+def is_run_cancelled(run_id: str) -> bool:
+    return get_run_status(run_id) == "cancelled"
+
+
 def set_step_status(run_id: str, step: str, status: str) -> None:
     r = get_redis()
     r.hset(_step_key(run_id), step, status)
