@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import IdeaInput from './IdeaInput'
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
-const EVENT_LIMIT = 8
+const EVENT_LIMIT = 12
 
 export default function WorkflowRunner() {
   const [idea, setIdea] = useState('')
@@ -18,6 +18,9 @@ export default function WorkflowRunner() {
   const [isExporting, setIsExporting] = useState(false)
   const [isNotebookDownloading, setIsNotebookDownloading] = useState(false)
   const [activeStep, setActiveStep] = useState('all')
+  const eventCursorRef = useRef(0)
+  const streamRef = useRef(null)
+  const runStatusRef = useRef(runStatus)
 
   const stepStatuses = useMemo(() => {
     const statusMap = {}
@@ -31,6 +34,15 @@ export default function WorkflowRunner() {
     activeStep === 'all'
       ? events
       : events.filter((event) => event.step === activeStep)
+
+  useEffect(() => {
+    runStatusRef.current = runStatus
+  }, [runStatus])
+
+  useEffect(() => {
+    eventCursorRef.current = 0
+    setEvents([])
+  }, [runId])
 
   useEffect(() => {
     const stored = localStorage.getItem('teamflow:lastIdea')
@@ -91,32 +103,63 @@ export default function WorkflowRunner() {
     if (!runId) {
       return undefined
     }
+    let isActive = true
 
-    const stream = new EventSource(`${API_BASE_URL}/runs/${runId}/events`)
-
-    stream.onmessage = (event) => {
-      if (!event.data) {
+    const connectStream = () => {
+      if (!isActive) {
         return
       }
-      try {
-        const parsed = JSON.parse(event.data)
-        setEvents((prev) => [parsed, ...prev].slice(0, EVENT_LIMIT))
-      } catch (err) {
-        setEvents((prev) =>
-          [{ type: 'event_parse_error', raw: event.data }, ...prev].slice(
-            0,
-            EVENT_LIMIT
+      const startFrom = Math.max(0, eventCursorRef.current || 0)
+      const stream = new EventSource(
+        `${API_BASE_URL}/runs/${runId}/events?start=${startFrom}`
+      )
+      streamRef.current = stream
+
+      stream.onmessage = (event) => {
+        if (!event.data) {
+          return
+        }
+        const lastId = Number(event.lastEventId)
+        if (!Number.isNaN(lastId)) {
+          eventCursorRef.current = lastId + 1
+        } else {
+          eventCursorRef.current += 1
+        }
+        try {
+          const parsed = JSON.parse(event.data)
+          setEvents((prev) => [parsed, ...prev].slice(0, EVENT_LIMIT))
+        } catch (err) {
+          setEvents((prev) =>
+            [{ type: 'event_parse_error', raw: event.data }, ...prev].slice(
+              0,
+              EVENT_LIMIT
+            )
           )
-        )
+        }
+      }
+
+      stream.onerror = () => {
+        stream.close()
+        if (!isActive) {
+          return
+        }
+        if (
+          runStatusRef.current === 'completed' ||
+          runStatusRef.current === 'failed'
+        ) {
+          return
+        }
+        setTimeout(connectStream, 1000)
       }
     }
 
-    stream.onerror = () => {
-      stream.close()
-    }
+    connectStream()
 
     return () => {
-      stream.close()
+      isActive = false
+      if (streamRef.current) {
+        streamRef.current.close()
+      }
     }
   }, [runId])
 
@@ -342,7 +385,7 @@ export default function WorkflowRunner() {
         <div className="runner-card agent-card">
           <h3>Agent progress</h3>
           <div className="step-list">
-            {['pm', 'tech', 'qa', 'review'].map((step) => (
+            {['pm', 'tech', 'qa', 'principal', 'review'].map((step) => (
               <div key={step} className="step-row">
                 <div>
                   <button
@@ -378,7 +421,7 @@ export default function WorkflowRunner() {
         <div className="runner-card live-events-card">
           <h3>Live events</h3>
           <div className="event-filters">
-            {['all', 'pm', 'tech', 'qa', 'review'].map((step) => (
+            {['all', 'pm', 'tech', 'qa', 'principal', 'review'].map((step) => (
               <button
                 key={step}
                 type="button"
@@ -401,9 +444,45 @@ export default function WorkflowRunner() {
             <div className="event-log">
               {filteredEvents.map((event, index) => (
                 <div key={`${event.type}-${index}`} className="event-row">
-                  <span>{event.type}</span>
-                  {event.step ? <span>• {event.step}</span> : null}
-                  {event.error ? <span>• {event.error}</span> : null}
+                  {event.type === 'agent_to' ? (
+                    <>
+                      <span>
+                        Orchestrator → {event.to}
+                        {typeof event.iteration !== 'undefined'
+                          ? ` (iter ${event.iteration})`
+                          : ''}
+                      </span>
+                      {event.step ? <span>• {event.step}</span> : null}
+                      {event.reason ? <span>• {event.reason}</span> : null}
+                    </>
+                  ) : event.type === 'agent_from' ? (
+                    <>
+                      <span>
+                        {event.from} → Orchestrator
+                        {typeof event.iteration !== 'undefined'
+                          ? ` (iter ${event.iteration})`
+                          : ''}
+                      </span>
+                      {event.step ? <span>• {event.step}</span> : null}
+                      {event.preview ? <span>• {event.preview}</span> : null}
+                    </>
+                  ) : event.type === 'revision_started' ? (
+                    <>
+                      <span>Revision cycle {event.iteration} started</span>
+                      {event.step ? <span>• {event.step}</span> : null}
+                    </>
+                  ) : event.type === 'revision_completed' ? (
+                    <>
+                      <span>Revision cycle {event.iteration} completed</span>
+                      {event.step ? <span>• {event.step}</span> : null}
+                    </>
+                  ) : (
+                    <>
+                      <span>{event.type}</span>
+                      {event.step ? <span>• {event.step}</span> : null}
+                      {event.error ? <span>• {event.error}</span> : null}
+                    </>
+                  )}
                 </div>
               ))}
             </div>

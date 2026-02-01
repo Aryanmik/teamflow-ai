@@ -8,8 +8,8 @@ import redis
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 REDIS_TTL_SECONDS = int(os.getenv("REDIS_TTL_SECONDS", "21600"))
 
-STEP_ORDER = ["pm", "tech", "qa", "review"]
-ARTIFACT_NAMES = ["prd", "arch", "api", "test", "risk", "review", "final"]
+STEP_ORDER = ["pm", "tech", "qa", "principal", "review"]
+ARTIFACT_NAMES = ["prd", "arch", "api", "test", "risk", "stack", "review", "final"]
 
 
 def get_redis() -> redis.Redis:

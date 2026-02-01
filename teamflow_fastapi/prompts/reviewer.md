@@ -8,6 +8,7 @@ Input
 - API Design: $api
 - Test Plan: $test
 - Risks: $risk
+- Tech Stack Recommendation: $stack
 
 Output requirements
 - Start with: "# Review Notes"
@@ -15,6 +16,7 @@ Output requirements
   - Issues and inconsistencies
   - Missing requirements or gaps
   - Suggested refinements
+  - Stack-related concerns (if any)
   - Optional consolidated notes if needed
 
 Formatting rules

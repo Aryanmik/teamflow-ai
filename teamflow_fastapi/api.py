@@ -5,7 +5,7 @@ from typing import Generator, List
 
 from dotenv import load_dotenv
 from celery import chain
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
 from .models import RunCreateRequest, RunCreateResponse, RunStatusResponse, StepStatus
@@ -22,7 +22,7 @@ from .storage import (
     set_run_status,
     set_step_status,
 )
-from .tasks import finalize, pm_step, qa_step, review_step, tech_step
+from .tasks import finalize, orchestrate_run
 
 load_dotenv()
 
@@ -32,11 +32,12 @@ REVIEW_ENABLED = os.getenv("REVIEW_ENABLED", "false").lower() in {"1", "true", "
 STREAM_TIMEOUT_SECONDS = int(os.getenv("SSE_STREAM_TIMEOUT_SECONDS", "60"))
 POLL_INTERVAL_SECONDS = float(os.getenv("SSE_POLL_INTERVAL_SECONDS", "1.0"))
 
-STEP_SEQUENCE = ["pm", "tech", "qa", "review"]
+STEP_SEQUENCE = ["pm", "tech", "qa", "principal", "review"]
 ARTIFACTS_BY_STEP = {
     "pm": ["prd"],
     "tech": ["arch", "api"],
     "qa": ["test", "risk"],
+    "principal": ["stack"],
     "review": ["review"],
 }
 
@@ -44,23 +45,7 @@ ARTIFACTS_BY_STEP = {
 def _build_chain(run_id: str, start_step: str = "pm"):
     if start_step not in STEP_SEQUENCE:
         raise ValueError("Unknown step")
-    steps: List = []
-    if start_step == "pm":
-        steps = [pm_step.si(run_id), tech_step.si(run_id), qa_step.si(run_id)]
-    elif start_step == "tech":
-        steps = [tech_step.si(run_id), qa_step.si(run_id)]
-    elif start_step == "qa":
-        steps = [qa_step.si(run_id)]
-    elif start_step == "review":
-        steps = [review_step.si(run_id)]
-
-    if REVIEW_ENABLED and start_step != "review":
-        steps.append(review_step.si(run_id))
-    if REVIEW_ENABLED and start_step == "review":
-        steps = [review_step.si(run_id)]
-
-    steps.append(finalize.si(run_id))
-    return chain(*steps)
+    return chain(orchestrate_run.si(run_id, start_step), finalize.si(run_id))
 
 
 def _steps_from(start_step: str) -> List[str]:
@@ -128,7 +113,7 @@ def regenerate_step(run_id: str, step: str) -> dict:
 
 
 @router.get("/runs/{run_id}/events")
-def stream_events(run_id: str) -> StreamingResponse:
+def stream_events(run_id: str, request: Request, start: int = 0) -> StreamingResponse:
     if not run_exists(run_id):
         raise HTTPException(status_code=404, detail="Run not found")
 
@@ -136,13 +121,20 @@ def stream_events(run_id: str) -> StreamingResponse:
         from .storage import get_events
 
         start_time = time.time()
-        index = 0
+        index = max(0, int(start))
+        last_event_id = request.headers.get("last-event-id")
+        if last_event_id:
+            try:
+                index = max(index, int(last_event_id) + 1)
+            except ValueError:
+                pass
         while time.time() - start_time < STREAM_TIMEOUT_SECONDS:
             items = get_events(run_id, index)
             if items:
                 for raw in items:
-                    index += 1
+                    yield f"id: {index}\n"
                     yield f"data: {raw}\n\n"
+                    index += 1
             else:
                 yield ": keep-alive\n\n"
             time.sleep(POLL_INTERVAL_SECONDS)
