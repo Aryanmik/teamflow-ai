@@ -52,10 +52,10 @@ QA ✅ Test plan ready`,
   },
 }
 
-export default function ClaudeHero() {
+export default function ClaudeHero({ onLoginClick }) {
   const [activeTab, setActiveTab] = useState('Terminal')
   const handleStart = () => {
-    const section = document.getElementById('workflow-runner')
+    const section = document.getElementById('workflow-preview')
     if (section) {
       section.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
@@ -88,10 +88,17 @@ export default function ClaudeHero() {
           <button className="btn-secondary" type="button" onClick={handleDemo}>
             View demo output
           </button>
+          <button
+            className="btn-secondary btn-link"
+            type="button"
+            onClick={onLoginClick}
+          >
+            Log in
+          </button>
         </div>
         <div className="hero-meta">
           <span>Fast setup</span>
-          <span>No login</span>
+          <span>Secure login</span>
           <span>Export Markdown</span>
         </div>
       </div>

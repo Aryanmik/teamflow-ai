@@ -3,12 +3,12 @@ import React from 'react'
 const LINKS = [
   { label: 'Overview', target: 'overview' },
   { label: 'Use cases', target: 'use-cases' },
-  { label: 'Workflow', target: 'workflow-runner' },
+  { label: 'Workflow', target: 'workflow-preview' },
   { label: 'Roadmap', target: 'roadmap' },
   { label: 'Contact', target: 'contact' },
 ]
 
-export default function Navbar() {
+export default function Navbar({ onLoginClick }) {
   const scrollToTarget = (target) => {
     const el = document.getElementById(target)
     if (!el) {
@@ -35,13 +35,22 @@ export default function Navbar() {
           </button>
         ))}
       </div>
-      <button
-        className="nav-cta"
-        type="button"
-        onClick={() => scrollToTarget('workflow-runner')}
-      >
-        Start collaboration
-      </button>
+      <div className="nav-actions">
+        <button
+          className="nav-link nav-login"
+          type="button"
+          onClick={onLoginClick}
+        >
+          Log in
+        </button>
+        <button
+          className="nav-cta"
+          type="button"
+          onClick={() => scrollToTarget('workflow-preview')}
+        >
+          Start collaboration
+        </button>
+      </div>
     </nav>
   )
 }
