@@ -693,7 +693,10 @@ body {
 
 .runner-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  grid-template-areas:
+    "idea progress"
+    "events events";
   gap: 16px;
 }
 
@@ -705,6 +708,18 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.runner-card.idea-card {
+  grid-area: idea;
+}
+
+.runner-card.agent-card {
+  grid-area: progress;
+}
+
+.runner-card.live-events-card {
+  grid-area: events;
 }
 
 .run-meta {
@@ -771,6 +786,20 @@ body {
   gap: 12px;
 }
 
+.step-select {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.step-select.active {
+  color: var(--accent);
+}
+
 .step-row strong {
   font-size: 13px;
 }
@@ -784,6 +813,29 @@ body {
   cursor: pointer;
 }
 
+.event-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.event-filter {
+  border: 1px solid rgba(24, 24, 22, 0.18);
+  background: transparent;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.event-filter.active {
+  background: var(--accent);
+  color: #f7f5f0;
+  border-color: transparent;
+}
+
 .event-log {
   background: #1f1f1b;
   color: #f7f5f0;
@@ -793,7 +845,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 200px;
+  max-height: 280px;
   overflow: auto;
 }
 
@@ -874,6 +926,14 @@ body {
 @media (max-width: 900px) {
   .runner-header {
     flex-direction: column;
+  }
+
+  .runner-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "idea"
+      "progress"
+      "events";
   }
 
   .run-meta {
